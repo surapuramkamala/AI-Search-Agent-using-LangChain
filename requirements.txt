@@ -1,0 +1,9 @@
+streamlit
+python-dotenv
+certifi
+langchain
+langchain-core
+langchain-classic
+langchain-tavily
+langchain-ollama
+tavily-python
