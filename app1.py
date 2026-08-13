@@ -1,149 +1,137 @@
 import os
-import certifi
+
 import streamlit as st
 from dotenv import load_dotenv
 
-#from langchain_community.tools.tavily_search import TavilySearchResults
-from langchain_tavily import TavilySearch
-#from langchain import langchainhub
-#import langchainhub as hub
-#from langchain import hub
+from langchain_openai import ChatOpenAI
+from langchain_core.messages import HumanMessage, AIMessage
 
-from langchain_classic.agents import create_react_agent, AgentExecutor
 
-#=================
-#LOAD ENV VARIABLE
-#=================
+# =========================
+# LOAD ENVIRONMENT VARIABLES
+# =========================
 
-os.environ["SSL_CERT_FILE"] = certifi.where()
 load_dotenv()
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-TAVILY_API_KEY = os.getenv("TAVILY_API_KEY")
+OPENAI_API_BASE = os.getenv("OPENAI_API_BASE")
 
-#=====================
-#STREAMLIT PAGE CONFIG
-#=================
+
+# =========================
+# STREAMLIT CONFIGURATION
+# =========================
+
 st.set_page_config(
-    page_title="Agentic AI Assistant",
+    page_title="AI Chatbot",
     page_icon="🤖",
-    layout='centered'
-)
-st.title("Agentic AI Assistant")
-st.markdown(
-    """
-    # Agentic AI Assistant
-    Ask a question and this assistant can reason over web search results before responding.
-    """
+    layout="centered"
 )
 
-#================
-#SEARCH TOOL
-#=================
-search_tool = TavilySearch(max_results=1)
-search_tool.name = "Search"
-search_tool.description = "Use this tool to search the web for current facts."
 
-result = search_tool.invoke("Give me the latest news on AI")
+# =========================
+# TITLE
+# =========================
 
-print(result)
+st.title("🤖 AI Chatbot")
+
+st.write(
+    "Chatbot using Streamlit, LangChain, OpenRouter and Conversation Memory."
+)
 
 
-# =====
+# =========================
 # LLM
-# =====
-from langchain_ollama import ChatOllama  
-llm = ChatOllama(
-    model="llama3.2",
+# =========================
+
+llm = ChatOpenAI(
+    model="openai/gpt-oss-20b:free",
+    base_url="https://openrouter.ai/api/v1",
+    api_key=OPENAI_API_KEY,
     temperature=0
 )
 
-response = llm.invoke('tell me about a joke?')
-print(response)
 
-#======
-# PROMPT
-#=======
-from langchain_core.prompts import PromptTemplate
+# =========================
+# MEMORY
+# =========================
 
-template = """Answer the following questions as best you can. You have access to the following tools:
+if "chat_memory" not in st.session_state:
+    st.session_state.chat_memory = []
 
-{tools}
 
-Use the following format:
+# =========================
+# DISPLAY PREVIOUS MESSAGES
+# =========================
 
-Question: the input question you must answer
-Thought: you should always think about what to do
-Action: the action to take, should be one of [{tool_names}]
-Action Input: the input to the action
-Observation: the result of the action
-... (this Thought/Action/Action Input/Observation can repeat N times)
-Thought: I now know the final answer
-Final Answer: the final answer to the original input question
+for message in st.session_state.chat_memory:
 
-Begin!
+    if isinstance(message, HumanMessage):
 
-Question: {input}
-Thought:{agent_scratchpad}"""
+        with st.chat_message("user"):
+            st.write(message.content)
 
-prompt = PromptTemplate.from_template(template)
-print(prompt)
+    elif isinstance(message, AIMessage):
 
-tools =[search_tool]
+        with st.chat_message("assistant"):
+            st.write(message.content)
 
-#===============
-#CREATING AGENT
-#===============
-agent = create_react_agent(
-    llm=llm,
-    tools=tools,
-    prompt=prompt
 
-)
+# =========================
+# USER INPUT
+# =========================
 
-#===========
-#AGENT EXECUTOR OBJECT
-#===========
+user_input = st.chat_input("Type your message...")
 
-agent_executor = AgentExecutor(
-    agent=agent,
-    tools=tools,
-    verbose=True
-)
 
-#=========
-#RUN
-#=========
-#response = agent_executor.invoke({
-#    'input' :(
-#        'what is india capital city?'
-#    )
-#})
-#print(response["output"])
+# =========================
+# CHAT PROCESSING
+# =========================
 
-#===============
-#UI INPUT
-#===============
-user_input = st.text_input(
-    "Ask a question:",
-    placeholder="Type your question here..."
+if user_input:
+
+    # Display user message
+    with st.chat_message("user"):
+        st.write(user_input)
+
+    # Add user message to memory
+    st.session_state.chat_memory.append(
+        HumanMessage(content=user_input)
     )
 
+    # Get complete conversation history
+    messages = st.session_state.chat_memory
 
-#=================
-#RUN AGENT
-#=================
-if st.button("Submit"):
-    if user_input:
-        with st.spinner('Agent is thinking..'):
+    # Call LLM
+    with st.chat_message("assistant"):
+
+        with st.spinner("Thinking..."):
+
             try:
-                response = agent_executor.invoke({
-                   "input": user_input 
-                })
-                st.success("Response Generated")
-                st.markdown("## Final Response")
-                st.write(response["output"])
+
+                response = llm.invoke(messages)
+
+                answer = response.content
+
+                st.write(answer)
+
+                # Save AI response
+                st.session_state.chat_memory.append(
+                    AIMessage(content=answer)
+                )
+
             except Exception as e:
+
                 st.error(f"Error: {str(e)}")
-    else:
-        st.warning("Please enter a question before submitting.")
+
+
+# =========================
+# CLEAR MEMORY
+# =========================
+
+st.sidebar.title("Memory")
+
+if st.sidebar.button("🗑️ Clear Chat"):
+
+    st.session_state.chat_memory = []
+
+    st.rerun()
