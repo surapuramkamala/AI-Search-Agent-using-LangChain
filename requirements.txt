@@ -5,5 +5,5 @@ langchain
 langchain-core
 langchain-classic
 langchain-tavily
-langchain-ollama
+langchain-openai
 tavily-python
